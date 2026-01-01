@@ -1,12 +1,22 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import Map, { Marker } from 'react-map-gl'
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+// Fix for default marker icon in Next.js
+delete L.Icon.Default.prototype._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+})
 
 export default function Home() {
   const [qr, setQr] = useState('')
   const [form, setForm] = useState({ name: '', age: '', user_id: '' })
   const [locations, setLocations] = useState([])
-  const [viewport, setViewport] = useState({ latitude: 0, longitude: 0, zoom: 2 })
+  const [center, setCenter] = useState([20, 0]) // Default center
 
   const handleScan = (data) => {
     if (data) {
@@ -32,7 +42,9 @@ export default function Home() {
       .channel('public:locations')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'locations' }, (payload) => {
         setLocations((prev) => [...prev, payload.new])
-        setViewport({ latitude: payload.new.lat, longitude: payload.new.lon, zoom: 14 })
+        if (payload.new.lat && payload.new.lon) {
+          setCenter([payload.new.lat, payload.new.lon])
+        }
       })
       .subscribe()
     return () => {
@@ -56,14 +68,26 @@ export default function Home() {
           </form>
         </div>
         <div className="w-2/3">
-          <h2 className="font-semibold">Live Map</h2>
-          <Map initialViewState={viewport} style={{ width: '100%', height: '500px' }} mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN} mapStyle="mapbox://styles/mapbox/streets-v11">
+          <h2 className="font-semibold">Live Map (OpenStreetMap)</h2>
+          <MapContainer center={center} zoom={4} style={{ width: '100%', height: '500px' }}>
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            />
             {locations.map((loc) => (
-              <Marker key={loc.id} longitude={loc.lon} latitude={loc.lat}>
-                <div className="bg-red-600 w-3 h-3 rounded-full" />
+              <Marker key={loc.id} position={[loc.lat, loc.lon]}>
+                <Popup>
+                  <div>
+                    <p><strong>Device:</strong> {loc.device_id}</p>
+                    <p><strong>User:</strong> {loc.user_id || 'N/A'}</p>
+                    <p><strong>Lat:</strong> {loc.lat.toFixed(6)}</p>
+                    <p><strong>Lon:</strong> {loc.lon.toFixed(6)}</p>
+                    {loc.accuracy && <p><strong>Accuracy:</strong> {loc.accuracy.toFixed(2)}m</p>}
+                  </div>
+                </Popup>
               </Marker>
             ))}
-          </Map>
+          </MapContainer>
         </div>
       </div>
     </div>
