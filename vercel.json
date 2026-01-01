@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd tracking-web && npm run build",
-  "installCommand": "cd tracking-web && npm install",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "rootDirectory": "tracking-web"
 }
+
 
